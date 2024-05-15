@@ -7,11 +7,12 @@ from PyQt5 import QtCore
 
 
 class FileExplorer(QMainWindow):
-    def __init__(self):
+    def __init__(self, port):
         super().__init__()
         self.setWindowTitle("File Explorer for Elbek")
         self.setGeometry(100, 100, 800, 600)
 
+        #Connection with server
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             self.client_socket.connect(('localhost', 65432))
@@ -29,30 +30,52 @@ class FileExplorer(QMainWindow):
         self.tree = QTreeView()
         self.tree.setModel(self.model)
         self.tree.setRootIndex(self.model.index(root_path))
+
+        #Set the width of the top columns
+        self.tree.setColumnWidth(0, 250)
+        self.tree.setColumnWidth(1, 100) 
+        self.tree.setColumnWidth(2, 100)
+        self.tree.setColumnWidth(3, 100)  
         layout.addWidget(self.tree)
 
+        #Set color to buttons
+        def green_button(icon, text, connect_function):
+            button = QPushButton(icon, text)
+            button.setStyleSheet("background-color: #4CAF50; color: white; border: none; padding: 5px 10px; text-align: center; text-decoration: none;font-size: 14px; margin: 2px 1px; border-radius: 10px;")
+            button.clicked.connect(connect_function)
+            return button 
+               
+        # Create a QHBoxLayout for the buttons
+        btns_layout = QHBoxLayout()
+
         # Find File button
-        find_btn_layout = QHBoxLayout()
-        find_btn = QPushButton(QIcon("icons/find.png"), "Find File")
-        find_btn.clicked.connect(self.open_search_window)  # Connect to a method in FileExplorer to open the search window
-        find_btn_layout.addWidget(find_btn)
-        layout.addLayout(find_btn_layout)
+        find_btn = green_button(QIcon("icons/find.png"), "Find File", self.find)
+        find_btn.clicked.connect(self.open_search_window)
+        btns_layout.addWidget(find_btn)
+
+        # Send File button
+        send_btn = green_button(QIcon("icons/send.png"), "Send File", self.send_file)
+        send_btn.clicked.connect(self.send_file)
+        btns_layout.addWidget(send_btn)
+
+        # Add the QHBoxLayout containing both buttons to the main layout
+        layout.addLayout(btns_layout)
+
+        # Set the central widget
+        central_widget = QWidget()
+        central_widget.setLayout(layout)
+        self.setCentralWidget(central_widget)
+
 
         # Buttons (Divided into two rows)
         btn_layout_1 = QHBoxLayout()
         btn_layout_2 = QHBoxLayout()
-
         
-        copy_btn = QPushButton(QIcon("icons/copy.png"), "Copy")
-        copy_btn.clicked.connect(self.copy_file)
-        delete_btn = QPushButton(QIcon("icons/delete.png"), "Delete")
-        delete_btn.clicked.connect(self.delete)
-        rename_btn = QPushButton(QIcon("icons/rename.png"), "Rename")
-        rename_btn.clicked.connect(self.rename_file)
-        create_btn = QPushButton(QIcon("icons/create.png"), "Create")
-        create_btn.clicked.connect(self.create_file)
-        view_btn = QPushButton(QIcon("icons/view.png"), "View Content")
-        view_btn.clicked.connect(self.view_content)
+        copy_btn = green_button(QIcon("icons/copy.png"), "Copy", self.copy_file)
+        delete_btn = green_button(QIcon("icons/delete.png"), "Delete", self.delete)
+        rename_btn = green_button(QIcon("icons/rename.png"), "Rename", self.rename_file)
+        create_btn = green_button(QIcon("icons/create.png"), "Create", self.create_file)
+        view_btn = green_button(QIcon("icons/view.png"), "View Content", self.view_content)
 
 
         btn_layout_1.addWidget(copy_btn)
@@ -61,14 +84,10 @@ class FileExplorer(QMainWindow):
         btn_layout_1.addWidget(create_btn)
         btn_layout_1.addWidget(view_btn)
 
-        move_btn = QPushButton(QIcon("icons/move.png"), "Move")
-        move_btn.clicked.connect(self.move_file)
-        zip_btn = QPushButton(QIcon("icons/zip.png"), "Zip")
-        zip_btn.clicked.connect(self.zip_file)
-        unzip_btn = QPushButton(QIcon("icons/unzip.png"), "Unzip")
-        unzip_btn.clicked.connect(self.unzip_file)
-        chmod_btn = QPushButton(QIcon("icons/permissions.png"), "Change Permissions")
-        chmod_btn.clicked.connect(self.change_permissions)
+        move_btn = green_button(QIcon("icons/move.png"), "Move", self.move_file)
+        zip_btn = green_button(QIcon("icons/zip.png"), "Zip", self.zip_file)
+        unzip_btn = green_button(QIcon("icons/unzip.png"), "Unzip", self.unzip_file)
+        chmod_btn = green_button(QIcon("icons/permissions.png"), "Change Permissions", self.change_permissions)
 
         btn_layout_2.addWidget(move_btn)
         btn_layout_2.addWidget(zip_btn)
@@ -82,15 +101,31 @@ class FileExplorer(QMainWindow):
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
 
+    def send_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select File to Send")
+        if file_path:
+            self.send_file_to_client(file_path) 
+
+    def send_file_to_client(self, file_path):
+        HOST = 'localhost'  # Replace with the server's hostname or IP address
+        PORT = 65432        # Replace with the port used by the server
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.connect((HOST, PORT))
+                s.sendall(b'SEND_FILE')
+                with open(file_path, 'rb') as f:
+                    while True:
+                        data = f.read(1024)
+                        if not data:
+                            break
+                        s.sendall(data)
+                print(f"File '{file_path}' sent successfully.")
+            except Exception as e:
+                print(f"Failed to send file: {e}")
     def open_search_window(self):
         self.search_window = FileSearchWindow()
         self.search_window.show()
-
-    # def view_content(self):
-    #     self.view_content = FileContentViewer()
-    #     self.view_content.show()        
-
-    # Method to display message boxes with specified title and message
 
     def send_command(self, command):
         self.client_socket.sendall(command.encode('utf-8'))
@@ -148,7 +183,6 @@ class FileExplorer(QMainWindow):
             new_path = os.path.join(os.path.dirname(file_path), new_name)
             if os.path.exists(new_path):
                 self.show_message_box("Error", "A file with the new name already exists in the directory. Please enter a different name.")
-                #
                 return
             try:
                 os.rename(file_path, new_path)
@@ -212,18 +246,18 @@ class FileExplorer(QMainWindow):
                 self.show_message_box("Error", f"Failed to zip file: {str(e)}", QMessageBox.Critical)
 
     def unzip_file(self):
-        zip_file, ok = QInputDialog.getText(self, "Unzip File", "Enter zip file name:")
+        current_index = self.tree.currentIndex()
+        file_path = self.model.filePath(current_index)
 
-        if ok and zip_file:
-            if not os.path.exists(zip_file):
-                self.show_message_box("Error", "The specified zip file does not exist.")
-                return
-            try:
-                os.system(f"unzip {zip_file}")
-                self.send_command(f"unzip {zip_file}")
-                self.show_message_box("Success", "File unzipped successfully.")
-            except OSError as e:
-                self.show_message_box("Error", f"Failed to unzip file: {str(e)}", QMessageBox.Critical)
+        if not os.path.exists(file_path):
+            self.show_message_box("Error", "The specified zip file does not exist.")
+            return
+        try:
+            os.system(f"unzip {file_path}")
+            self.send_command(f"unzip {file_path}")
+            self.show_message_box("Success", "File unzipped successfully.")
+        except OSError as e:
+            self.show_message_box("Error", f"Failed to unzip file: {str(e)}", QMessageBox.Critical)
 
 
     def change_permissions(self):
@@ -255,37 +289,35 @@ class FileExplorer(QMainWindow):
             QMessageBox.critical(self, "Error", f"Failed to view file content: {str(e)}")
 
 
-
 class FileContentViewer(QDialog):
     def __init__(self, file_path):
         super().__init__()
+        self.file_path = file_path  # Store the file path as an attribute
         layout = QVBoxLayout()
         self.image_label = QLabel()
         layout.addWidget(self.image_label)
         self.setLayout(layout)
         self.setWindowTitle("File Content Viewer")
         self.setGeometry(100, 100, 600, 400)
-        self.set_content(file_path)
+        self.set_content()
+    
 
-    def set_content(self, file_path):
-        pixmap = QPixmap(file_path)
-        pixmap = pixmap.scaled(600, 400, aspectRatioMode=QtCore.Qt.KeepAspectRatio)
-        if pixmap.isNull():
-            self.image_label.setText("Failed to load image.")
+    def set_content(self):
+        if self.file_path.endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
+            pixmap = QPixmap(self.file_path)
+            pixmap = pixmap.scaled(600, 400, aspectRatioMode=QtCore.Qt.KeepAspectRatio)
+            if pixmap.isNull():
+                self.image_label.setText("Failed to load image.")
+            else:
+                self.image_label.setPixmap(pixmap)
+                self.image_label.setScaledContents(False)
         else:
-            self.image_label.setPixmap(pixmap)
-            self.image_label.setScaledContents(False)
-
-    # def view_content(self):
-    #     current_index = self.tree.currentIndex()
-    #     file_path = self.model.filePath(current_index)
-    #     try:
-    #         with open(file_path, "r") as file:
-    #             content = file.read()
-    #             viewer = FileContentViewer(content,file_path)
-    #             viewer.show_content()
-    #     except OSError as e:
-    #         self.show_message_box("Error", f"Failed to view file content: {str(e)}", QMessageBox.Critical)
+            try:
+                with open(self.file_path, "r") as file:
+                    content = file.read()
+                    self.image_label.setText(content)
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to open file: {str(e)}")
 
 class FileSearchWindow(QMainWindow):
     def __init__(self):
@@ -330,6 +362,6 @@ class FileSearchWindow(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = FileExplorer()
+    window = FileExplorer("65432")
     window.show()
     sys.exit(app.exec_())
